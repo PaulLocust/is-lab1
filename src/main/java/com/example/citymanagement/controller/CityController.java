@@ -29,7 +29,7 @@ public class CityController {
     
     @Autowired
     private CoordinatesService coordinatesService;
-    
+
     @GetMapping({"", "/", "/list"})
     public String getAllCities(
             @RequestParam(defaultValue = "0") int page,
@@ -38,26 +38,28 @@ public class CityController {
             @RequestParam(defaultValue = "asc") String sortDir,
             @RequestParam(required = false) String search,
             Model model) {
-        
+
         System.out.println("CityController.getAllCities called with page=" + page + ", size=" + size);
-        
+
         Page<City> citiesPage;
+
         if (search != null && !search.trim().isEmpty()) {
-            List<City> cities = cityService.searchCities(search);
-            model.addAttribute("cities", cities);
+            // Используем поиск с пагинацией и сортировкой
+            citiesPage = cityService.searchCities(search, page, size, sortBy, sortDir);
             model.addAttribute("search", search);
         } else {
+            // Обычный список с пагинацией
             citiesPage = cityService.getCitiesPage(page, size, sortBy, sortDir);
-            model.addAttribute("cities", citiesPage.getContent());
-            model.addAttribute("currentPage", page);
-            model.addAttribute("totalPages", citiesPage.getTotalPages());
-            model.addAttribute("totalElements", citiesPage.getTotalElements());
         }
-        
+
+        model.addAttribute("cities", citiesPage.getContent());
+        model.addAttribute("currentPage", page);
+        model.addAttribute("totalPages", citiesPage.getTotalPages());
+        model.addAttribute("totalElements", citiesPage.getTotalElements());
         model.addAttribute("sortBy", sortBy);
         model.addAttribute("sortDir", sortDir);
         model.addAttribute("size", size);
-        
+
         System.out.println("Returning view: cities/list");
         return "cities/list";
     }

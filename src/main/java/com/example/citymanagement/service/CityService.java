@@ -40,9 +40,13 @@ public class CityService {
         Pageable pageable = PageRequest.of(page, size, sort);
         return cityRepository.findAll(pageable);
     }
-    
-    public List<City> searchCities(String name) {
-        return cityRepository.findByNameContaining(name);
+
+    public Page<City> searchCities(String name, int page, int size, String sortBy, String sortDir) {
+        Sort sort = sortDir.equalsIgnoreCase("desc") ?
+                Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        return cityRepository.findByNameContaining(name, pageable);
     }
     
     public Optional<City> getCityById(Long id) {

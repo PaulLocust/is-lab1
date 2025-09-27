@@ -67,10 +67,15 @@
 
         <!-- Search Form -->
         <div class="search-form">
-            <form method="get" action="/city-management/cities" class="row g-3">
+            <form method="get" th:action="@{/cities}" class="row g-3">
                 <div class="col-md-8">
                     <input type="text" name="search" class="form-control"
                            th:value="${search}" placeholder="Search cities by name...">
+                    <!-- Скрытые поля для сохранения параметров пагинации и сортировки -->
+                    <input type="hidden" name="page" th:value="${currentPage}">
+                    <input type="hidden" name="size" th:value="${size}">
+                    <input type="hidden" name="sortBy" th:value="${sortBy}">
+                    <input type="hidden" name="sortDir" th:value="${sortDir}">
                 </div>
                 <div class="col-md-4">
                     <button type="submit" class="btn btn-outline-primary">
@@ -90,13 +95,13 @@
                     <thead class="table-dark">
                         <tr>
                             <th>
-                                <a th:href="@{/cities(page=${currentPage}, size=${size}, sortBy='id', sortDir=${sortDir == 'asc' ? 'desc' : 'asc'})}"
+                                <a th:href="@{/cities(page=${currentPage}, size=${size}, sortBy='id', sortDir=${sortDir == 'asc' ? 'desc' : 'asc'}, search=${search})}"
                                    class="text-white text-decoration-none">
                                     ID <i class="fas fa-sort"></i>
                                 </a>
                             </th>
                             <th>
-                                <a th:href="@{/cities(page=${currentPage}, size=${size}, sortBy='name', sortDir=${sortDir == 'asc' ? 'desc' : 'asc'})}"
+                                <a th:href="@{/cities(page=${currentPage}, size=${size}, sortBy='name', sortDir=${sortDir == 'asc' ? 'desc' : 'asc'}, search=${search})}"
                                    class="text-white text-decoration-none">
                                     Name <i class="fas fa-sort"></i>
                                 </a>
@@ -147,26 +152,56 @@
             <div th:if="${totalPages > 1}" class="d-flex justify-content-between align-items-center mt-3">
                 <div>
                     <span class="text-muted">
-                        Showing <span th:text="${currentPage * size + 1}"></span> to
-                        <span th:text="${Math.min((currentPage + 1) * size, totalElements)}"></span> of
-                        <span th:text="${totalElements}"></span> cities
+                        Page <span th:text="${currentPage + 1}"></span> of <span th:text="${totalPages}"></span>
                     </span>
                 </div>
                 <nav>
                     <ul class="pagination">
+                        <!-- Previous -->
                         <li class="page-item" th:classappend="${currentPage == 0} ? 'disabled'">
-                            <a class="page-link" th:href="@{/cities(page=${currentPage - 1}, size=${size}, sortBy=${sortBy}, sortDir=${sortDir})}">Previous</a>
+                            <a class="page-link" th:href="@{/cities(page=${currentPage - 1}, size=${size}, sortBy=${sortBy}, sortDir=${sortDir}, search=${search})}">‹</a>
                         </li>
-                        <li class="page-item" th:each="i : ${#numbers.sequence(0, totalPages - 1)}"
+
+                        <!-- First page -->
+                        <li class="page-item" th:classappend="${currentPage == 0} ? 'active'">
+                            <a class="page-link" th:href="@{/cities(page=0, size=${size}, sortBy=${sortBy}, sortDir=${sortDir}, search=${search})}">1</a>
+                        </li>
+
+                        <!-- Ellipsis before -->
+                        <li class="page-item disabled" th:if="${currentPage > 3}">
+                            <span class="page-link">...</span>
+                        </li>
+
+                        <!-- Middle pages - fixed range -->
+                        <li class="page-item"
+                            th:each="i : ${#numbers.sequence((currentPage > 2) ? currentPage - 2 : 0,(currentPage < totalPages - 3) ? currentPage + 2 : totalPages - 1)}"
+                            th:if="${i > 0 and i < totalPages - 1}"
                             th:classappend="${i == currentPage} ? 'active'">
-                            <a class="page-link" th:href="@{/cities(page=${i}, size=${size}, sortBy=${sortBy}, sortDir=${sortDir})}"
+                            <a class="page-link"
+                               th:href="@{/cities(page=${i}, size=${size}, sortBy=${sortBy}, sortDir=${sortDir}, search=${search})}"
                                th:text="${i + 1}"></a>
                         </li>
+
+                        <!-- Ellipsis after -->
+                        <li class="page-item disabled" th:if="${currentPage < totalPages - 4}">
+                            <span class="page-link">...</span>
+                        </li>
+
+                        <!-- Last page -->
+                        <li class="page-item" th:if="${totalPages > 1}" th:classappend="${currentPage == totalPages - 1} ? 'active'">
+                            <a class="page-link" th:href="@{/cities(page=${totalPages - 1}, size=${size}, sortBy=${sortBy}, sortDir=${sortDir}, search=${search})}" th:text="${totalPages}"></a>
+                        </li>
+
+                        <!-- Next -->
                         <li class="page-item" th:classappend="${currentPage == totalPages - 1} ? 'disabled'">
-                            <a class="page-link" th:href="@{/cities(page=${currentPage + 1}, size=${size}, sortBy=${sortBy}, sortDir=${sortDir})}">Next</a>
+                            <a class="page-link" th:href="@{/cities(page=${currentPage + 1}, size=${size}, sortBy=${sortBy}, sortDir=${sortDir}, search=${search})}">›</a>
                         </li>
                     </ul>
                 </nav>
+            </div>
+
+            <div th:if="${totalPages == 0}" class="text-center mt-3">
+                <span class="text-muted">No cities found</span>
             </div>
         </div>
 

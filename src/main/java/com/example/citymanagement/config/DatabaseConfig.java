@@ -14,13 +14,13 @@ public class DatabaseConfig {
     @Value("localhost") //pg
     private String host;
 
-    @Value("5432") //5432
+    @Value("5432") // 5432
     private String port;
 
-    @Value("is_lab1") //studs
+    @Value("is_lab1") // studs
     private String database;
 
-    @Value("postgres") //s409517
+    @Value("postgres") // s409517
     private String username;
 
     @Value("root") //O2SrXNfNxzyfo9sl
