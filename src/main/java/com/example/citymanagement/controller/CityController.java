@@ -5,6 +5,9 @@ import com.example.citymanagement.model.Climate;
 import com.example.citymanagement.model.Coordinates;
 import com.example.citymanagement.service.CityService;
 import com.example.citymanagement.service.CoordinatesService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
@@ -22,21 +25,23 @@ import java.util.Map;
 
 @Controller
 @RequestMapping("/cities")
+@Tag(name = "City Controller", description = "API для управления городами")
 public class CityController {
-    
+
     @Autowired
     private CityService cityService;
-    
+
     @Autowired
     private CoordinatesService coordinatesService;
 
+    @Operation(summary = "Получить список городов с пагинацией и поиском")
     @GetMapping({"", "/", "/list"})
     public String getAllCities(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
-            @RequestParam(defaultValue = "id") String sortBy,
-            @RequestParam(defaultValue = "asc") String sortDir,
-            @RequestParam(required = false) String search,
+            @Parameter(description = "Номер страницы") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Размер страницы") @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Поле для сортировки") @RequestParam(defaultValue = "id") String sortBy,
+            @Parameter(description = "Направление сортировки") @RequestParam(defaultValue = "asc") String sortDir,
+            @Parameter(description = "Поисковый запрос") @RequestParam(required = false) String search,
             Model model) {
 
         System.out.println("CityController.getAllCities called with page=" + page + ", size=" + size);
@@ -63,9 +68,12 @@ public class CityController {
         System.out.println("Returning view: cities/list");
         return "cities/list";
     }
-    
+
+    @Operation(summary = "Получить город по ID")
     @GetMapping("/{id}")
-    public String getCityById(@PathVariable Long id, Model model) {
+    public String getCityById(
+            @Parameter(description = "ID города") @PathVariable Long id,
+            Model model) {
         City city = cityService.getCityById(id).orElse(null);
         if (city == null) {
             return "error/404";
@@ -73,7 +81,8 @@ public class CityController {
         model.addAttribute("city", city);
         return "cities/detail";
     }
-    
+
+    @Operation(summary = "Показать форму создания города")
     @GetMapping("/new")
     public String showCreateForm(Model model) {
         model.addAttribute("city", new City());
@@ -81,9 +90,13 @@ public class CityController {
         model.addAttribute("climates", Climate.values());
         return "cities/form";
     }
-    
+
+    @Operation(summary = "Создать новый город")
     @PostMapping
-    public String createCity(@Valid @ModelAttribute City city, BindingResult result, Model model) {
+    public String createCity(
+            @Parameter(description = "Данные города") @Valid @ModelAttribute City city,
+            BindingResult result,
+            Model model) {
 
         processCityBeforeValidation(city);
 
@@ -92,13 +105,16 @@ public class CityController {
             model.addAttribute("climates", Climate.values());
             return "cities/form";
         }
-        
+
         cityService.saveCity(city);
         return "redirect:/cities";
     }
-    
+
+    @Operation(summary = "Показать форму редактирования города")
     @GetMapping("/{id}/edit")
-    public String showEditForm(@PathVariable Long id, Model model) {
+    public String showEditForm(
+            @Parameter(description = "ID города") @PathVariable Long id,
+            Model model) {
         City city = cityService.getCityById(id).orElse(null);
         if (city == null) {
             return "error/404";
@@ -109,8 +125,13 @@ public class CityController {
         return "cities/form";
     }
 
+    @Operation(summary = "Обновить город")
     @PostMapping("/{id}")
-    public String updateCity(@PathVariable Long id, @Valid @ModelAttribute City city, BindingResult result, Model model) {
+    public String updateCity(
+            @Parameter(description = "ID города") @PathVariable Long id,
+            @Parameter(description = "Данные города") @Valid @ModelAttribute City city,
+            BindingResult result,
+            Model model) {
 
         processCityBeforeValidation(city);
 
@@ -125,8 +146,11 @@ public class CityController {
         return "redirect:/cities";
     }
 
-    @GetMapping("/{id}/delete")  // Изменили с @PostMapping на @GetMapping
-    public String deleteCity(@PathVariable Long id, Model model) {
+    @Operation(summary = "Удалить город")
+    @GetMapping("/{id}/delete")
+    public String deleteCity(
+            @Parameter(description = "ID города") @PathVariable Long id,
+            Model model) {
         try {
             cityService.deleteCity(id);
             return "redirect:/cities";
@@ -135,11 +159,14 @@ public class CityController {
             return "error/404";
         }
     }
-    
+
     // Special operations API endpoints
+
+    @Operation(summary = "Удалить города по типу климата")
     @PostMapping("/special/delete-by-climate")
     @ResponseBody
-    public ResponseEntity<Map<String, Object>> deleteCitiesByClimate(@RequestParam Climate climate) {
+    public ResponseEntity<Map<String, Object>> deleteCitiesByClimate(
+            @Parameter(description = "Тип климата") @RequestParam Climate climate) {
         Map<String, Object> response = new HashMap<>();
         try {
             long deletedCount = cityService.deleteCitiesByClimate(climate);
@@ -152,7 +179,8 @@ public class CityController {
         }
         return ResponseEntity.ok(response);
     }
-    
+
+    @Operation(summary = "Получить среднюю высоту над уровнем моря")
     @GetMapping("/special/average-meters")
     @ResponseBody
     public ResponseEntity<Map<String, Object>> getAverageMetersAboveSeaLevel() {
@@ -168,7 +196,8 @@ public class CityController {
         }
         return ResponseEntity.ok(response);
     }
-    
+
+    @Operation(summary = "Получить уникальные коды автомобилей")
     @GetMapping("/special/unique-car-codes")
     @ResponseBody
     public ResponseEntity<Map<String, Object>> getUniqueCarCodes() {
@@ -184,7 +213,8 @@ public class CityController {
         }
         return ResponseEntity.ok(response);
     }
-    
+
+    @Operation(summary = "Рассчитать расстояние до города с максимальной площадью")
     @GetMapping("/special/distance-to-max-area")
     @ResponseBody
     public ResponseEntity<Map<String, Object>> calculateDistanceToCityWithMaxArea() {
@@ -200,7 +230,8 @@ public class CityController {
         }
         return ResponseEntity.ok(response);
     }
-    
+
+    @Operation(summary = "Рассчитать расстояние от начала координат до города с максимальным населением")
     @GetMapping("/special/distance-from-origin-to-max-population")
     @ResponseBody
     public ResponseEntity<Map<String, Object>> calculateDistanceFromOriginToCityWithMaxPopulation() {
@@ -249,5 +280,3 @@ public class CityController {
         }
     }
 }
-
-
