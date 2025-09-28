@@ -423,7 +423,7 @@ class CityManager {
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="mb-3">
-                                    <label for="coordinatesX" class="form-label">X Coordinate *</label>
+                                    <label for="coordinatesX" class="form-label">X Coordinate</label>
                                     <input type="number" step="0.01" class="form-control" id="coordinatesX" 
                                            value="${isEdit && city.coordinates ? city.coordinates.x : '0'}" required>
                                     <div class="invalid-feedback" id="coordinatesXError"></div>
@@ -431,7 +431,7 @@ class CityManager {
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3">
-                                    <label for="coordinatesY" class="form-label">Y Coordinate *</label>
+                                    <label for="coordinatesY" class="form-label">Y Coordinate</label>
                                     <input type="number" class="form-control" id="coordinatesY" 
                                            value="${isEdit && city.coordinates ? city.coordinates.y : '0'}" 
                                            min="-958" required>
