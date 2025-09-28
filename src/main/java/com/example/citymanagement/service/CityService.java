@@ -20,23 +20,23 @@ import java.util.Optional;
 @Service
 @Transactional
 public class CityService {
-    
+
     @Autowired
     private CityRepository cityRepository;
-    
+
     @Autowired
     private HumanService humanService;
-    
+
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
-    
+
     public List<City> getAllCities() {
         return cityRepository.findAll();
     }
-    
+
     public Page<City> getCitiesPage(int page, int size, String sortBy, String sortDir) {
-        Sort sort = sortDir.equalsIgnoreCase("desc") ? 
-            Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
+        Sort sort = sortDir.equalsIgnoreCase("desc") ?
+                Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
         Pageable pageable = PageRequest.of(page, size, sort);
         return cityRepository.findAll(pageable);
     }
@@ -48,7 +48,7 @@ public class CityService {
 
         return cityRepository.findByNameContaining(name, pageable);
     }
-    
+
     public Optional<City> getCityById(Long id) {
         return cityRepository.findById(id);
     }
@@ -68,49 +68,49 @@ public class CityService {
         notifyCityUpdate("city_updated");
         return savedCity;
     }
-    
+
     public void deleteCity(Long id) {
         // Check if city exists
         if (!cityRepository.existsById(id)) {
             throw new RuntimeException("City with ID " + id + " not found");
         }
-        
+
         // Check if city is referenced by other cities (as governor)
         // This is a simple check - in a real scenario you might want more complex validation
         cityRepository.deleteById(id);
         notifyCityUpdate("city_updated");
     }
-    
+
     public boolean existsById(Long id) {
         return cityRepository.existsById(id);
     }
-    
+
     // Special operations using database functions
     public long deleteCitiesByClimate(Climate climate) {
         Integer deletedCount = cityRepository.deleteCitiesByClimateFunction(climate.toString());
         notifyCityUpdate("city_updated");
         return deletedCount != null ? deletedCount : 0;
     }
-    
+
     public Double getAverageMetersAboveSeaLevel() {
         return cityRepository.getAverageMetersAboveSeaLevel();
     }
-    
+
     public List<Long> getUniqueCarCodes() {
         return cityRepository.getUniqueCarCodes();
     }
-    
+
     public double calculateDistanceToCityWithMaxArea() {
         Double distance = cityRepository.calculateDistanceToMaxAreaCity();
         return distance != null ? distance : 0.0;
     }
-    
+
     public double calculateDistanceFromOriginToCityWithMaxPopulation() {
         Double distance = cityRepository.calculateDistanceToMaxPopulationCity();
         return distance != null ? distance : 0.0;
     }
-    
-    
+
+
     private void notifyCityUpdate(String message) {
         messagingTemplate.convertAndSend("/topic/city-updates", message);
     }

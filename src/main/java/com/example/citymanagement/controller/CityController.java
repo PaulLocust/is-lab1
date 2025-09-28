@@ -2,161 +2,161 @@ package com.example.citymanagement.controller;
 
 import com.example.citymanagement.model.City;
 import com.example.citymanagement.model.Climate;
-import com.example.citymanagement.model.Coordinates;
 import com.example.citymanagement.service.CityService;
-import com.example.citymanagement.service.CoordinatesService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
-
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
-@Controller
-@RequestMapping("/cities")
-@Tag(name = "City Controller", description = "API для управления городами")
+@RestController
+@RequestMapping("/api/cities")
+@Tag(name = "City Controller", description = "REST API для управления городами")
 public class CityController {
 
     @Autowired
     private CityService cityService;
 
-    @Autowired
-    private CoordinatesService coordinatesService;
-
     @Operation(summary = "Получить список городов с пагинацией и поиском")
-    @GetMapping({"", "/", "/list"})
-    public String getAllCities(
+    @GetMapping
+    public ResponseEntity<Map<String, Object>> getAllCities(
             @Parameter(description = "Номер страницы") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Размер страницы") @RequestParam(defaultValue = "10") int size,
             @Parameter(description = "Поле для сортировки") @RequestParam(defaultValue = "id") String sortBy,
             @Parameter(description = "Направление сортировки") @RequestParam(defaultValue = "asc") String sortDir,
-            @Parameter(description = "Поисковый запрос") @RequestParam(required = false) String search,
-            Model model) {
+            @Parameter(description = "Поисковый запрос") @RequestParam(required = false) String search) {
 
-        System.out.println("CityController.getAllCities called with page=" + page + ", size=" + size);
+        try {
+            Page<City> citiesPage;
 
-        Page<City> citiesPage;
+            if (search != null && !search.trim().isEmpty()) {
+                citiesPage = cityService.searchCities(search, page, size, sortBy, sortDir);
+            } else {
+                citiesPage = cityService.getCitiesPage(page, size, sortBy, sortDir);
+            }
 
-        if (search != null && !search.trim().isEmpty()) {
-            // Используем поиск с пагинацией и сортировкой
-            citiesPage = cityService.searchCities(search, page, size, sortBy, sortDir);
-            model.addAttribute("search", search);
-        } else {
-            // Обычный список с пагинацией
-            citiesPage = cityService.getCitiesPage(page, size, sortBy, sortDir);
+            Map<String, Object> response = new HashMap<>();
+            response.put("cities", citiesPage.getContent());
+            response.put("currentPage", citiesPage.getNumber());
+            response.put("totalPages", citiesPage.getTotalPages());
+            response.put("totalElements", citiesPage.getTotalElements());
+            response.put("sortBy", sortBy);
+            response.put("sortDir", sortDir);
+            response.put("size", size);
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error loading cities: " + e.getMessage()));
         }
-
-        model.addAttribute("cities", citiesPage.getContent());
-        model.addAttribute("currentPage", page);
-        model.addAttribute("totalPages", citiesPage.getTotalPages());
-        model.addAttribute("totalElements", citiesPage.getTotalElements());
-        model.addAttribute("sortBy", sortBy);
-        model.addAttribute("sortDir", sortDir);
-        model.addAttribute("size", size);
-
-        System.out.println("Returning view: cities/list");
-        return "cities/list";
     }
 
     @Operation(summary = "Получить город по ID")
     @GetMapping("/{id}")
-    public String getCityById(
-            @Parameter(description = "ID города") @PathVariable Long id,
-            Model model) {
-        City city = cityService.getCityById(id).orElse(null);
-        if (city == null) {
-            return "error/404";
-        }
-        model.addAttribute("city", city);
-        return "cities/detail";
-    }
+    public ResponseEntity<?> getCityById(
+            @Parameter(description = "ID города") @PathVariable Long id) {
 
-    @Operation(summary = "Показать форму создания города")
-    @GetMapping("/new")
-    public String showCreateForm(Model model) {
-        model.addAttribute("city", new City());
-        model.addAttribute("coordinates", coordinatesService.getAllCoordinates());
-        model.addAttribute("climates", Climate.values());
-        return "cities/form";
+        try {
+            Optional<City> city = cityService.getCityById(id);
+
+            if (city.isPresent()) {
+                return ResponseEntity.ok(city.get());
+            } else {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "City not found with id: " + id));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error loading city: " + e.getMessage()));
+        }
     }
 
     @Operation(summary = "Создать новый город")
     @PostMapping
-    public String createCity(
-            @Parameter(description = "Данные города") @Valid @ModelAttribute City city,
-            BindingResult result,
-            Model model) {
+    public ResponseEntity<?> createCity(
+            @Parameter(description = "Данные города") @Valid @RequestBody City city,
+            BindingResult result) {
 
-        processCityBeforeValidation(city);
+        try {
+            if (result.hasErrors()) {
+                Map<String, String> errors = result.getFieldErrors().stream()
+                        .collect(Collectors.toMap(FieldError::getField, FieldError::getDefaultMessage));
+                return ResponseEntity.badRequest().body(Map.of("errors", errors));
+            }
 
-        if (result.hasErrors()) {
-            model.addAttribute("coordinates", coordinatesService.getAllCoordinates());
-            model.addAttribute("climates", Climate.values());
-            return "cities/form";
+            // Автоматическая установка даты создания
+            if (city.getCreationDate() == null) {
+                city.setCreationDate(LocalDateTime.now());
+            }
+
+            City savedCity = cityService.saveCity(city);
+            return ResponseEntity.status(HttpStatus.CREATED).body(savedCity);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error creating city: " + e.getMessage()));
         }
-
-        cityService.saveCity(city);
-        return "redirect:/cities";
-    }
-
-    @Operation(summary = "Показать форму редактирования города")
-    @GetMapping("/{id}/edit")
-    public String showEditForm(
-            @Parameter(description = "ID города") @PathVariable Long id,
-            Model model) {
-        City city = cityService.getCityById(id).orElse(null);
-        if (city == null) {
-            return "error/404";
-        }
-        model.addAttribute("city", city);
-        model.addAttribute("coordinates", coordinatesService.getAllCoordinates());
-        model.addAttribute("climates", Climate.values());
-        return "cities/form";
     }
 
     @Operation(summary = "Обновить город")
-    @PostMapping("/{id}")
-    public String updateCity(
+    @PutMapping("/{id}")
+    public ResponseEntity<?> updateCity(
             @Parameter(description = "ID города") @PathVariable Long id,
-            @Parameter(description = "Данные города") @Valid @ModelAttribute City city,
-            BindingResult result,
-            Model model) {
+            @Parameter(description = "Данные города") @Valid @RequestBody City city,
+            BindingResult result) {
 
-        processCityBeforeValidation(city);
+        try {
+            if (result.hasErrors()) {
+                Map<String, String> errors = result.getFieldErrors().stream()
+                        .collect(Collectors.toMap(FieldError::getField, FieldError::getDefaultMessage));
+                return ResponseEntity.badRequest().body(Map.of("errors", errors));
+            }
 
-        if (result.hasErrors()) {
-            model.addAttribute("coordinates", coordinatesService.getAllCoordinates());
-            model.addAttribute("climates", Climate.values());
-            return "cities/form";
+            if (!cityService.getCityById(id).isPresent()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "City not found with id: " + id));
+            }
+
+            city.setId(id);
+            City updatedCity = cityService.saveCity(city);
+            return ResponseEntity.ok(updatedCity);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error updating city: " + e.getMessage()));
         }
-
-        city.setId(id);
-        cityService.saveCity(city);
-        return "redirect:/cities";
     }
 
     @Operation(summary = "Удалить город")
-    @GetMapping("/{id}/delete")
-    public String deleteCity(
-            @Parameter(description = "ID города") @PathVariable Long id,
-            Model model) {
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteCity(
+            @Parameter(description = "ID города") @PathVariable Long id) {
+
         try {
+            if (!cityService.getCityById(id).isPresent()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "City not found with id: " + id));
+            }
+
             cityService.deleteCity(id);
-            return "redirect:/cities";
+            return ResponseEntity.ok().body(Map.of("message", "City deleted successfully"));
         } catch (RuntimeException e) {
-            model.addAttribute("error", e.getMessage());
-            return "error/404";
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error deleting city: " + e.getMessage()));
         }
     }
 
@@ -164,119 +164,98 @@ public class CityController {
 
     @Operation(summary = "Удалить города по типу климата")
     @PostMapping("/special/delete-by-climate")
-    @ResponseBody
     public ResponseEntity<Map<String, Object>> deleteCitiesByClimate(
             @Parameter(description = "Тип климата") @RequestParam Climate climate) {
+
         Map<String, Object> response = new HashMap<>();
         try {
             long deletedCount = cityService.deleteCitiesByClimate(climate);
             response.put("success", true);
             response.put("deletedCount", deletedCount);
             response.put("message", "Deleted " + deletedCount + " cities with climate " + climate);
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             response.put("success", false);
             response.put("message", "Error deleting cities: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
-        return ResponseEntity.ok(response);
     }
 
     @Operation(summary = "Получить среднюю высоту над уровнем моря")
     @GetMapping("/special/average-meters")
-    @ResponseBody
     public ResponseEntity<Map<String, Object>> getAverageMetersAboveSeaLevel() {
+
         Map<String, Object> response = new HashMap<>();
         try {
             Double average = cityService.getAverageMetersAboveSeaLevel();
             response.put("success", true);
             response.put("average", average);
             response.put("message", "Average meters above sea level: " + (average != null ? String.format("%.2f", average) : "N/A"));
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             response.put("success", false);
             response.put("message", "Error calculating average: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
-        return ResponseEntity.ok(response);
     }
 
     @Operation(summary = "Получить уникальные коды автомобилей")
     @GetMapping("/special/unique-car-codes")
-    @ResponseBody
     public ResponseEntity<Map<String, Object>> getUniqueCarCodes() {
+
         Map<String, Object> response = new HashMap<>();
         try {
             List<Long> carCodes = cityService.getUniqueCarCodes();
             response.put("success", true);
             response.put("carCodes", carCodes);
             response.put("message", "Found " + carCodes.size() + " unique car codes");
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             response.put("success", false);
             response.put("message", "Error getting unique car codes: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
-        return ResponseEntity.ok(response);
     }
 
     @Operation(summary = "Рассчитать расстояние до города с максимальной площадью")
     @GetMapping("/special/distance-to-max-area")
-    @ResponseBody
     public ResponseEntity<Map<String, Object>> calculateDistanceToCityWithMaxArea() {
+
         Map<String, Object> response = new HashMap<>();
         try {
             double distance = cityService.calculateDistanceToCityWithMaxArea();
             response.put("success", true);
             response.put("distance", distance);
             response.put("message", "Distance to city with max area: " + String.format("%.2f", distance));
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             response.put("success", false);
             response.put("message", "Error calculating distance: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
-        return ResponseEntity.ok(response);
     }
 
     @Operation(summary = "Рассчитать расстояние от начала координат до города с максимальным населением")
     @GetMapping("/special/distance-from-origin-to-max-population")
-    @ResponseBody
     public ResponseEntity<Map<String, Object>> calculateDistanceFromOriginToCityWithMaxPopulation() {
+
         Map<String, Object> response = new HashMap<>();
         try {
             double distance = cityService.calculateDistanceFromOriginToCityWithMaxPopulation();
             response.put("success", true);
             response.put("distance", distance);
             response.put("message", "Distance from origin to city with max population: " + String.format("%.2f", distance));
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             response.put("success", false);
             response.put("message", "Error calculating distance: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
-        return ResponseEntity.ok(response);
     }
 
-    // Метод для предварительной обработки города
-    private void processCityBeforeValidation(City city) {
-        // Убедимся, что coordinates не null (обязательное поле)
-        if (city.getCoordinates() == null) {
-            city.setCoordinates(new Coordinates(0.0f, 0L));
-        }
-
-        // Установка даты создания, если не установлена
-        if (city.getCreationDate() == null) {
-            city.setCreationDate(LocalDateTime.now());
-        }
-
-        // Обработка необязательных полей - если пустые строки, то null
-        if (city.getMetersAboveSeaLevel() != null && city.getMetersAboveSeaLevel() == 0) {
-            city.setMetersAboveSeaLevel(null);
-        }
-
-        if (city.getCarCode() != null && city.getCarCode() == 0) {
-            city.setCarCode(null);
-        }
-
-        // Обработка governor - если высота 0, то устанавливаем governor в null
-        if (city.getGovernor() != null && city.getGovernor().getHeight() == 0) {
-            city.setGovernor(null);
-        }
-
-        // Установка capital по умолчанию, если не выбрано
-        if (city.getCapital() == null) {
-            city.setCapital(false);
-        }
+    @Operation(summary = "Получить все доступные типы климата")
+    @GetMapping("/climates")
+    public ResponseEntity<Climate[]> getClimates() {
+        return ResponseEntity.ok(Climate.values());
     }
 }
