@@ -78,7 +78,7 @@ public class City {
     @Schema(description = "Губернатор города")
     private Human governor;
 
-    // Constructors, getters, setters остаются без изменений
+
     public City() {
         this.creationDate = LocalDateTime.now();
         this.coordinates = new Coordinates(0.0f, 0L);

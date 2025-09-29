@@ -54,14 +54,14 @@ public class CityService {
     }
 
     public City saveCity(City city) {
-        // If governor is provided but has no ID, save it first
-        if (city.getGovernor() != null && city.getGovernor().getId() == null) {
-            // Create a new Human object with the provided height
-            Human governor = new Human();
-            governor.setHeight(city.getGovernor().getHeight());
-            // Save the governor first to get an ID
-            Human savedGovernor = humanService.saveHuman(governor);
-            city.setGovernor(savedGovernor);
+        // Обработка губернатора - загружаем полный объект из базы по ID
+        if (city.getGovernor() != null && city.getGovernor().getId() != null) {
+            Human governor = humanService.getHumanById(city.getGovernor().getId())
+                    .orElse(null);
+            city.setGovernor(governor);
+        } else {
+            // Если губернатор без ID или null, сбрасываем
+            city.setGovernor(null);
         }
 
         City savedCity = cityRepository.save(city);
@@ -70,13 +70,10 @@ public class CityService {
     }
 
     public void deleteCity(Long id) {
-        // Check if city exists
         if (!cityRepository.existsById(id)) {
             throw new RuntimeException("City with ID " + id + " not found");
         }
 
-        // Check if city is referenced by other cities (as governor)
-        // This is a simple check - in a real scenario you might want more complex validation
         cityRepository.deleteById(id);
         notifyCityUpdate("city_updated");
     }
@@ -113,5 +110,9 @@ public class CityService {
 
     private void notifyCityUpdate(String message) {
         messagingTemplate.convertAndSend("/topic/city-updates", message);
+    }
+
+    public List<Human> getAllHumans() {
+        return humanService.getAllHumans();
     }
 }

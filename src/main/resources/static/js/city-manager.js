@@ -7,6 +7,7 @@ class CityManager {
         this.sortDir = 'asc';
         this.searchTerm = '';
         this.cityToDelete = null;
+        this.isOwnUpdate = false;
         this.connectWebSocket();
         this.init();
     }
@@ -16,8 +17,11 @@ class CityManager {
     }
 
     // Загрузка списка городов
-    async loadCities(page = 0) {
-        this.showLoading();
+    async loadCities(page = 0, updateOnlyTable = false) {
+        if (!updateOnlyTable) {
+            this.showLoading();
+        }
+
         this.currentPage = page;
 
         const params = new URLSearchParams({
@@ -36,20 +40,34 @@ class CityManager {
             if (!response.ok) throw new Error('Network error');
 
             const data = await response.json();
-            this.renderCityList(data);
+
+            if (updateOnlyTable) {
+                this.renderCityTableOnly(data);
+            } else {
+                this.renderCityList(data);
+            }
         } catch (error) {
-            this.showError('Error loading cities: ' + error.message);
+            if (updateOnlyTable) {
+                console.error('Error updating cities table:', error);
+            } else {
+                this.showError('Error loading cities: ' + error.message);
+            }
         }
     }
 
-    // Отображение списка городов
+    // Отображение полного списка городов
     renderCityList(data) {
         const html = `
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h1><i class="fas fa-city"></i> Cities</h1>
-                <button class="btn btn-primary" onclick="cityManager.showCityForm()">
-                    <i class="fas fa-plus"></i> Add New City
-                </button>
+                <div>
+                    <button class="btn btn-primary me-2" onclick="cityManager.showCityForm()">
+                        <i class="fas fa-plus"></i> Add New City
+                    </button>
+                    <button class="btn btn-outline-success" onclick="cityManager.showCreateGovernorModal()">
+                        <i class="fas fa-user-plus"></i> Create Governor
+                    </button>
+                </div>
             </div>
 
             <div class="search-form mb-4">
@@ -70,35 +88,60 @@ class CityManager {
             </div>
 
             <div class="table-container">
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover">
-                        <thead class="table-dark">
-                            <tr>
-                                <th><a href="#" onclick="cityManager.sort('id')">ID <i class="fas fa-sort"></i></a></th>
-                                <th><a href="#" onclick="cityManager.sort('name')">Name <i class="fas fa-sort"></i></a></th>
-                                <th>Coordinates</th>
-                                <th>Area</th>
-                                <th>Population</th>
-                                <th>Climate</th>
-                                <th>Capital</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${data.cities && data.cities.length > 0 ?
-            data.cities.map(city => this.renderCityRow(city)).join('') :
-            '<tr><td colspan="8" class="text-center text-muted">No cities found</td></tr>'
-        }
-                        </tbody>
-                    </table>
-                </div>
-                ${this.renderPagination(data)}
+                <!-- Таблица будет загружена через renderCityTableOnly -->
             </div>
 
             ${this.renderSpecialOperations()}
         `;
 
         document.getElementById('app-content').innerHTML = html;
+
+        // Рендерим таблицу отдельно
+        this.renderCityTableOnly(data);
+    }
+
+    // Рендеринг только таблицы городов
+    renderCityTableOnly(data) {
+        const tableHtml = `
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th><a href="#" onclick="cityManager.sort('id')">ID <i class="fas fa-sort"></i></a></th>
+                            <th><a href="#" onclick="cityManager.sort('name')">Name <i class="fas fa-sort"></i></a></th>
+                            <th>Coordinates</th>
+                            <th>Area</th>
+                            <th>Population</th>
+                            <th>Climate</th>
+                            <th>Capital</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.cities && data.cities.length > 0 ?
+            data.cities.map(city => this.renderCityRow(city)).join('') :
+            `<tr>
+                                <td colspan="8" class="text-center text-muted py-4">
+                                    <i class="fas fa-inbox fa-2x mb-2"></i><br>
+                                    No cities found
+                                    ${this.searchTerm ? ' matching your search criteria' : ''}
+                                </td>
+                            </tr>`
+        }
+                    </tbody>
+                </table>
+            </div>
+            ${this.renderPagination(data)}
+        `;
+
+        // Находим контейнер таблицы и обновляем только его
+        const tableContainer = document.querySelector('.table-container');
+        if (tableContainer) {
+            tableContainer.innerHTML = tableHtml;
+        } else {
+            // Если контейнера нет, перезагружаем всю страницу
+            this.renderCityList(data);
+        }
     }
 
     // Рендер строки города в таблице
@@ -333,6 +376,10 @@ class CityManager {
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
+                                <span class="detail-label">ID:</span>
+                                <span class="detail-value">${city.governor.id}</span>
+                            </div>
+                            <div class="mb-3">
                                 <span class="detail-label">Height:</span>
                                 <span class="detail-value">${city.governor.height} m</span>
                             </div>
@@ -497,10 +544,14 @@ class CityManager {
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3">
-                                    <label for="governorHeight" class="form-label">Governor Height (meters)</label>
-                                    <input type="number" step="0.01" class="form-control" id="governorHeight" 
-                                           value="${isEdit && city.governor ? city.governor.height : ''}" min="0.01">
-                                    <div class="invalid-feedback" id="governorHeightError"></div>
+                                    <label for="governorSelect" class="form-label">Governor</label>
+                                    <select class="form-select" id="governorSelect">
+                                        <option value="">-- Select Governor --</option>
+                                        <!-- Список будет заполнен через JavaScript -->
+                                    </select>
+                                    <small class="form-text text-muted">
+                                        <a href="#" onclick="cityManager.showCreateGovernorModal()">Create new governor</a>
+                                    </small>
                                 </div>
                             </div>
                         </div>
@@ -520,11 +571,25 @@ class CityManager {
         document.getElementById('city-modal-content').innerHTML = html;
         const modal = new bootstrap.Modal(document.getElementById('cityModal'));
         modal.show();
+
+        // Загружаем список губернаторов после показа модального окна
+        setTimeout(() => {
+            this.loadGovernorsForCityForm().then(() => {
+                // Устанавливаем выбранного губернатора при редактировании
+                if (isEdit && city.governor && city.governor.id) {
+                    const select = document.getElementById('governorSelect');
+                    if (select) {
+                        select.value = city.governor.id;
+                    }
+                }
+            });
+        }, 100);
     }
 
     // Сохранить город
     async saveCity() {
         this.clearErrors();
+        this.isOwnUpdate = true;
 
         const formData = {
             name: document.getElementById('name').value,
@@ -555,9 +620,9 @@ class CityManager {
         const establishmentDate = document.getElementById('establishmentDate').value;
         if (establishmentDate) formData.establishmentDate = establishmentDate + ':00';
 
-        const governorHeight = document.getElementById('governorHeight').value;
-        if (governorHeight) {
-            formData.governor = { height: parseFloat(governorHeight) };
+        const governorId = document.getElementById('governorSelect').value;
+        if (governorId) {
+            formData.governor = { id: parseInt(governorId) };
         }
 
         const id = document.getElementById('cityId').value;
@@ -578,7 +643,9 @@ class CityManager {
             if (response.ok) {
                 bootstrap.Modal.getInstance(document.getElementById('cityModal')).hide();
                 this.showOperationResult('City ' + (id ? 'updated' : 'created') + ' successfully!', true);
-                await this.loadCities(this.currentPage);
+
+                // Обновляем только таблицу
+                await this.loadCities(0, true);
                 this.notifyUpdate();
             } else {
                 // Обработка ошибок валидации
@@ -590,6 +657,97 @@ class CityManager {
             }
         } catch (error) {
             this.showOperationResult('Error saving city: ' + error.message, false);
+        }
+    }
+
+    // Показать модальное окно создания губернатора
+    showCreateGovernorModal() {
+        console.log('showCreateGovernorModal called');
+
+        const governorForm = document.getElementById('governorForm');
+        const heightInput = document.getElementById('governorHeightInput');
+
+        if (!governorForm || !heightInput) {
+            console.error('Governor form elements not found!');
+            return;
+        }
+
+        governorForm.reset();
+        heightInput.classList.remove('is-invalid');
+
+        const errorElement = document.getElementById('governorHeightError');
+        if (errorElement) {
+            errorElement.textContent = '';
+        }
+
+        const modalElement = document.getElementById('governorModal');
+        if (modalElement) {
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+        } else {
+            console.error('Governor modal element not found!');
+        }
+    }
+
+    // Создать нового губернатора
+    async createGovernor() {
+        const heightInput = document.getElementById('governorHeightInput');
+        const height = parseFloat(heightInput.value);
+
+        // Валидация
+        if (!height || height <= 0) {
+            heightInput.classList.add('is-invalid');
+            document.getElementById('governorHeightError').textContent = 'Height must be greater than 0';
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/humans', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ height: height })
+            });
+
+            if (response.ok) {
+                const governor = await response.json();
+                bootstrap.Modal.getInstance(document.getElementById('governorModal')).hide();
+                this.showOperationResult(`Governor created successfully! ID: ${governor.id}`, true);
+
+                // Обновить список губернаторов в форме города, если она открыта
+                if (document.getElementById('cityModal').classList.contains('show')) {
+                    await this.loadGovernorsForCityForm();
+                }
+            } else {
+                const result = await response.json();
+                this.showOperationResult(result.error || 'Error creating governor', false);
+            }
+        } catch (error) {
+            this.showOperationResult('Error creating governor: ' + error.message, false);
+        }
+    }
+
+    // Загрузить список губернаторов для формы города
+    async loadGovernorsForCityForm() {
+        try {
+            const response = await fetch('/api/humans');
+            if (!response.ok) throw new Error('Failed to load governors');
+
+            const governors = await response.json();
+            const select = document.getElementById('governorSelect');
+
+            if (select) {
+                select.innerHTML = '<option value="">-- Select Governor --</option>';
+                governors.forEach(governor => {
+                    const option = document.createElement('option');
+                    option.value = governor.id;
+                    option.textContent = `ID: ${governor.id}, Height: ${governor.height}m`;
+                    select.appendChild(option);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading governors:', error);
         }
     }
 
@@ -622,8 +780,8 @@ class CityManager {
             const response = await fetch(`${this.baseUrl}/${id}`);
             if (!response.ok) throw new Error('City not found');
 
-            const cityData = await response.json();  // ← Переименуем в cityData
-            this.showCityForm(cityData);  // ← Передаем как простой объект
+            const cityData = await response.json();
+            this.showCityForm(cityData);
         } catch (error) {
             this.showOperationResult('Error loading city: ' + error.message, false);
         }
@@ -641,6 +799,8 @@ class CityManager {
         if (!this.cityToDelete) return;
 
         try {
+            this.isOwnUpdate = true;
+
             const response = await fetch(`${this.baseUrl}/${this.cityToDelete}`, {
                 method: 'DELETE'
             });
@@ -648,7 +808,9 @@ class CityManager {
             if (response.ok) {
                 bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
                 this.showOperationResult('City deleted successfully!', true);
-                await this.loadCities(this.currentPage);
+
+                // Обновляем только таблицу
+                await this.loadCities(0, true);
                 this.notifyUpdate();
             } else {
                 const result = await response.json();
@@ -670,6 +832,8 @@ class CityManager {
         }
 
         try {
+            this.isOwnUpdate = true;
+
             const response = await fetch(`${this.baseUrl}/special/delete-by-climate?climate=${climate}`, {
                 method: 'POST'
             });
@@ -677,7 +841,10 @@ class CityManager {
 
             this.showOperationResult(result.message, result.success);
             if (result.success) {
-                setTimeout(() => this.loadCities(this.currentPage), 2000);
+                // Обновляем только таблицу
+                setTimeout(async () => {
+                    await this.loadCities(0, true);
+                }, 1000);
             }
         } catch (error) {
             this.showOperationResult('Error: ' + error.message, false);
@@ -732,19 +899,19 @@ class CityManager {
     // Поиск и сортировка
     search() {
         this.searchTerm = document.getElementById('searchInput').value;
-        this.loadCities(0);
+        this.loadCities(0); // Полная перезагрузка, так как меняется поисковый запрос
     }
 
     clearSearch() {
         this.searchTerm = '';
         document.getElementById('searchInput').value = '';
-        this.loadCities(0);
+        this.loadCities(0); // Полная перезагрузка
     }
 
     sort(field) {
         this.sortDir = this.sortBy === field && this.sortDir === 'asc' ? 'desc' : 'asc';
         this.sortBy = field;
-        this.loadCities(this.currentPage);
+        this.loadCities(this.currentPage, true); // Обновляем только таблицу
     }
 
     // WebSocket для реальных обновлений
@@ -757,14 +924,15 @@ class CityManager {
                 console.log('WebSocket connected: ', frame);
 
                 // Подписываемся на обновления городов
-                this.stompClient.subscribe('/topic/city-updates', (message) => {
+                this.stompClient.subscribe('/topic/city-updates', async (message) => {
                     try {
                         const data = JSON.parse(message.body);
                         console.log('WebSocket message received:', data);
 
                         if (data.type === 'city_updated') {
-                            this.showOperationResult('City data updated by another user', true);
-                            this.loadCities(this.currentPage);
+                            // Обновляем только таблицу, не всю страницу
+                            await this.loadCities(0, true);
+                            this.showOperationResult('City data was updated by another user', true);
                         }
                     } catch (e) {
                         console.error('Error processing WebSocket message:', e);
@@ -846,10 +1014,3 @@ class CityManager {
         return date.toISOString().slice(0, 16);
     }
 }
-
-// Инициализация при загрузке страницы
-let cityManager;
-
-document.addEventListener('DOMContentLoaded', () => {
-    cityManager = new CityManager();
-});

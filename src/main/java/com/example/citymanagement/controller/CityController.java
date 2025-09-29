@@ -2,6 +2,7 @@ package com.example.citymanagement.controller;
 
 import com.example.citymanagement.model.City;
 import com.example.citymanagement.model.Climate;
+import com.example.citymanagement.model.Human;
 import com.example.citymanagement.service.CityService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -257,5 +258,16 @@ public class CityController {
     @GetMapping("/climates")
     public ResponseEntity<Climate[]> getClimates() {
         return ResponseEntity.ok(Climate.values());
+    }
+
+    @Operation(summary = "Получить всех губернаторов для выбора")
+    @GetMapping("/governors")
+    public ResponseEntity<List<Human>> getAllGovernors() {
+        try {
+            List<Human> governors = cityService.getAllHumans();
+            return ResponseEntity.ok(governors);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 }
